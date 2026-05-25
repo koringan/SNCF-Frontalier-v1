@@ -1,5 +1,5 @@
 // TrainLog v5 — Service Worker mis à jour pour GitHub Pages
-const CACHE = 'trainlog-v5';
+const CACHE = 'trainlog-v999';
 const ASSETS = [
   './',
   './index.html',
