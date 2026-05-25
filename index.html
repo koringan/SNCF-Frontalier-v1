@@ -503,7 +503,7 @@ async function searchTrainsForFav() {
   const from = document.getElementById('f-from')?.value.trim();
   const time = document.getElementById('f-dep')?.value;
   const to   = document.getElementById('f-to')?.value.trim();
-  if (!from || !time) { toast('ℹ️ Renseignez la gare de départ et l'heure d'abord'); return; }
+  if (!from || !time) { toast("ℹ️ Renseignez la gare de départ et l'heure d'abord"); return; }
   if (WORKER_URL === 'REMPLACE_PAR_TON_WORKER_URL') { toast('ℹ️ Worker non configuré — matching désactivé'); return; }
 
   favSncfLoading = true;
