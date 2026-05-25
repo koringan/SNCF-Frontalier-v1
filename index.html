@@ -638,92 +638,66 @@ function reliabilityScore(entries){
 // ══════════════════════════════════════════════════════════════════════════════
 // SNCF API
 // ══════════════════════════════════════════════════════════════════════════════
-const SNCF_KEY='d1404599-ae03-4156-bc33-0552631cf219';
-const SNCF_BASE='https://api.sncf.com/v1/coverage/sncf';
-const SNCF_AUTH='Basic '+btoa(SNCF_KEY+':');
-const STOP_IDS={
-  'metz':'stop_area:SNCF:87192047','metz-ville':'stop_area:SNCF:87192047',
-  'paris-est':'stop_area:SNCF:87113001','paris est':'stop_area:SNCF:87113001',
-  'nancy':'stop_area:SNCF:87141002','strasbourg':'stop_area:SNCF:87212027',
-  'lyon':'stop_area:SNCF:87723197','bordeaux':'stop_area:SNCF:87581009',
-  'marseille':'stop_area:SNCF:87751008','lille':'stop_area:SNCF:87286005',
-};
-function getStopId(gare){return gare?STOP_IDS[gare.toLowerCase().trim()]||null:null;}
+async function sncfSearchTrains(from, to, time) {
 
-async function sncfSearchTrains(from,to,time){
-  const stopId=getStopId(from);
-  if(!stopId){
-    const base=Math.floor(Math.random()*9000+1000);
-    return[
-      {num:String(base),name:`Train ${base}`,sched:time,officialDelay:Math.floor(Math.random()*8),cause:null,source:'simulé (gare inconnue)'},
-      {num:String(base+4),name:`Train ${base+4}`,sched:time,officialDelay:Math.floor(Math.random()*15)+2,cause:'Régulation',source:'simulé (gare inconnue)'},
-    ];
+  const url =
+    WORKER_URL +
+    '/trains?from=' +
+    encodeURIComponent(from) +
+    '&to=' +
+    encodeURIComponent(to || '') +
+    '&time=' +
+    encodeURIComponent(time);
+
+  console.log('TRAINS URL:', url);
+
+  const resp =
+    await fetch(url);
+
+  const data =
+    await resp.json();
+
+  console.log(
+    'WORKER TRAINS:',
+    data
+  );
+
+  if (!data.ok) {
+
+    throw new Error(
+      data.error || 'API error'
+    );
   }
-  try{
-    const now=new Date();const[h,m]=time.split(':').map(Number);
-    const dt=new Date(now);dt.setHours(h,m,0,0);
-    const dtStr=dt.toISOString().replace(/[-:]/g,'').slice(0,15);
-    const url=`${SNCF_BASE}/stop_areas/${stopId}/departures?from_datetime=${dtStr}&count=10&data_freshness=realtime`;
-    const resp=await fetch(url,{headers:{'Authorization':SNCF_AUTH}});
-    if(!resp.ok)throw new Error(`HTTP ${resp.status}`);
-    const data=await resp.json();
-    const deps=(data.departures||[]).filter(d=>{
-      const depTime=d.stop_date_time?.departure_date_time||'';
-      if(!depTime)return false;
-      const dh=parseInt(depTime.slice(9,11)),dm=parseInt(depTime.slice(11,13));
-      return Math.abs(dh*60+dm-(h*60+m))<=30;
-    }).slice(0,4);
-    if(!deps.length)throw new Error('no departures');
-    return deps.map(d=>{
-      const info=d.display_informations||{};
-      const base_dt=d.stop_date_time?.base_departure_date_time||'';
-      const real_dt=d.stop_date_time?.departure_date_time||'';
-      let officialDelay=0;
-      if(base_dt&&real_dt){
-        const parseT=s=>parseInt(s.slice(9,11))*60+parseInt(s.slice(11,13));
-        officialDelay=parseT(real_dt)-parseT(base_dt);
-      }
-      const schedH=base_dt?base_dt.slice(9,11):'??',schedM=base_dt?base_dt.slice(11,13):'??';
-      return{num:info.headsign||'?',name:`${info.commercial_mode||'Train'} ${info.headsign||''}`.trim(),
-        sched:`${schedH}:${schedM}`,officialDelay,cause:officialDelay>5?'Retard constaté':null,
-        source:'SNCF API (temps réel)',direction:info.direction||to};
-    });
-  }catch(err){
-    console.warn('SNCF search error:',err.message);
-    const base=Math.floor(Math.random()*9000+1000);
-    return[
-      {num:String(base),name:`Train ${base}`,sched:time,officialDelay:0,cause:null,source:'simulé (API indisponible)'},
-      {num:String(base+4),name:`Train ${base+4}`,sched:time,officialDelay:3,cause:'Régulation',source:'simulé (API indisponible)'},
-    ];
-  }
+
+  return data.trains || [];
 }
-async function sncfGetTrain(trainNum,from,to){
-  if(!trainNum)return null;
-  try{
-    const url=`${SNCF_BASE}/vehicle_journeys?headsign=${encodeURIComponent(trainNum)}&data_freshness=realtime&count=3`;
-    const resp=await fetch(url,{headers:{'Authorization':SNCF_AUTH}});
-    if(!resp.ok)throw new Error(`HTTP ${resp.status}`);
-    const data=await resp.json();
-    const vj=(data.vehicle_journeys||[])[0];
-    if(!vj)throw new Error('not found');
-    const stops=vj.stop_times||[];
-    let officialDelay=0;
-    for(const st of stops){
-      const base=st.base_departure_date_time||'',real=st.departure_date_time||'';
-      if(base&&real&&base!==real){
-        const parseT=s=>parseInt(s.slice(9,11))*60+parseInt(s.slice(11,13));
-        officialDelay=parseT(real)-parseT(base);break;
-      }
-    }
-    return{num:trainNum,officialDelay,cause:officialDelay>5?'Retard constaté':null,
-      status:officialDelay<=2?"À l'heure":`Retard +${officialDelay}min`,source:'SNCF API (temps réel)'};
-  }catch(err){
-    console.warn('SNCF getTrain error:',err.message);
-    const officialDelay=Math.floor(Math.random()*12)-1;
-    return{num:trainNum,officialDelay,cause:officialDelay>5?['Incident','Régulation','Affluence'][Math.floor(Math.random()*3)]:null,
-      status:officialDelay<=2?"À l'heure":`Retard +${officialDelay}min`,source:'simulé (API indisponible)'};
-  }
+
+async function sncfGetTrain(trainNum) {
+
+  const url =
+    WORKER_URL +
+    '/delay/' +
+    encodeURIComponent(trainNum);
+
+  console.log(
+    'DELAY URL:',
+    url
+  );
+
+  const resp =
+    await fetch(url);
+
+  const data =
+    await resp.json();
+
+  console.log(
+    'WORKER DELAY:',
+    data
+  );
+
+  return data.data || data;
 }
+
 
 // ══════════════════════════════════════════════════════════════════════════════
 // TOAST
