@@ -328,6 +328,10 @@ nav{display:flex;border-bottom:1px solid var(--bd);background:var(--s1);position
 <div class="toast" id="toast"></div>
 
 <script>
+  window.onerror = function(message, source, lineno, colno, error) {
+  alert("🚨 ERREUR BLOCANTE :\n\n" + message + "\n\nÀ la ligne : " + lineno + "\nColonne : " + colno);
+  return false;
+};
 // ══════════════════════════════════════════════════════════════════════════════
 // SCHEMA & STORAGE
 // ══════════════════════════════════════════════════════════════════════════════
