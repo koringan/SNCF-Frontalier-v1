@@ -1,6 +1,6 @@
 {
-  "name": "TrainLog v4 - Suivi retards",
-  "short_name": "TrainLog",
+  "name": "SNCF Retard - Suivi retards",
+  "short_name": "SNCF Retard",
   "description": "Enregistrez vos retards de train et comparez avec les données SNCF",
   "start_url": "./index.html",
   "display": "standalone",
